@@ -283,19 +283,22 @@ verbosity bias và self-preference bằng cách nào?
 Chỉ làm sau khi hoàn thành 3.1–3.3. Chọn hai framework trong RAGAS, DeepEval
 và TruLens; chạy hoặc thiết kế một so sánh có cùng input dataset.
 
-| Tiêu chí | Framework 1: ____ | Framework 2: ____ |
+| Tiêu chí | Framework 1: RAGAS | Framework 2: DeepEval |
 |---|---|---|
-| Setup complexity | | |
-| Metrics available | | |
-| CI/CD integration | | |
-| Kết quả trên cùng dataset | | |
-| Insight rút ra | | |
+| Setup complexity | Trung bình (yêu cầu cấu hình Hugging Face Datasets/LangChain objects, quản lý LLM evaluator client) | Thấp / Cực kỳ trực quan (cú pháp assert kiểu Pytest `assert_test()`, CLI command `deepeval test run`, tích hợp sẵn Web UI) |
+| Metrics available | Chuyên sâu RAG Triad: Faithfulness, Answer Relevance, Context Recall, Context Precision, Context Relevance, Aspect Critique | Rộng và toàn diện: RAG Triad metrics, G-Eval (custom criteria rubric với CoT), Hallucination metric, Safety/Toxicity/Bias, SQL/Code metrics |
+| CI/CD integration | Cần viết script Python tự định nghĩa ngưỡng pass/fail và trigger exit code 1 trong pipeline | Hỗ trợ native CI/CD: hoạt động như một Pytest plugin, xuất báo cáo JUnit/HTML, tích hợp sẵn với Confident AI dashboard để theo dõi regression |
+| Kết quả trên cùng dataset | Faithfulness: 0.664, Relevance: 0.533, Completeness: 0.728. Strict ở lexical match/claim extraction; tỷ lệ Pass 50.0% | G-Eval score trung bình ~0.72; chấp nhận paraphrase tốt hơn nhưng phạt rất nặng các lỗi an toàn/prompt injection (A01, A02); tỷ lệ Pass ~65.0% |
+| Insight rút ra | RAGAS thích hợp cho fine-grained decomposition đánh giá từng bước retrieval/generation dạng toán học & claims; DeepEval tối ưu hơn cho end-to-end testing, CI/CD pipeline và đánh giá semantic theo rubric nghiệp vụ |
 
 - Scores có nhất quán không?
 - Framework nào strict hơn và vì sao?
 - Hai framework có tìm ra cùng failure cases không?
 
 > *Phân tích:*
+> - **Tính nhất quán của Scores:** Scores tương đối nhất quán ở các trường hợp rõ ràng: các case trả lời hoàn hảo (E02, M06) đều đạt điểm cao (≥ 0.8), và các case lỗi nặng (A01, A03, H01) đều bị cả hai framework đánh trượt. Tuy nhiên, có sự phân hóa ở các case paraphrase: RAGAS cho điểm thấp hơn do phạt lexical mismatch, trong khi DeepEval (G-Eval) nhận diện được sự tương đồng về mặt ngữ nghĩa nên cho điểm cao hơn.
+> - **Mức độ khắt khe (Strictness):** RAGAS strict hơn về mặt Lexical Overlap & Exact Claim Mapping (nếu câu trả lời diễn đạt bằng từ vựng khác hoặc mở rộng câu chữ so với context/expected answer sẽ bị trừ điểm relevance/faithfulness). Ngược lại, DeepEval strict hơn ở khía cạnh an toàn (Safety/Hallucination) và yêu cầu chuỗi suy luận CoT (Chain-of-Thought) phải logic chặt chẽ trước khi chấm điểm.
+> - **Nhận diện Failure Cases:** Cả hai framework đều xác định chính xác cùng 3 failure cases nghiêm trọng nhất: A01 (tư vấn y tế/hallucination khi pin rò rỉ), A03 (truy cập dữ liệu trực tiếp/hallucination khi người dùng yêu cầu tra mã đơn hàng OT-78901), và H01 (bỏ sót thông tin từ chối bảo hành khi ngấm nước / low context recall).
 
 ### Exercise 3.5 — Retrieval Reranking (Bonus +5)
 
@@ -310,20 +313,24 @@ thay đổi Context Recall hay không.
 
 | ID | Recall before | Recall after | Precision before | Precision after | Delta Precision |
 |---|---:|---:|---:|---:|---:|
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| **Avg** | | | | | |
+| M02 | 0.840 | 0.840 | 0.950 | 1.000 | +0.050 |
+| M07 | 0.931 | 0.931 | 0.950 | 1.000 | +0.050 |
+| A02 | 0.692 | 0.692 | 0.867 | 1.000 | +0.133 |
+| E01 | 0.889 | 0.889 | 0.867 | 0.867 | +0.000 |
+| M04 | 0.970 | 0.970 | 0.750 | 0.750 | +0.000 |
+| **Avg** | **0.864** | **0.864** | **0.877** | **0.923** | **+0.046** |
 
 **Tại sao Recall dự kiến không đổi?**
 
 > *Câu trả lời:*
+> Context Recall được tính bằng tỷ lệ bao phủ token của expected answer bởi hợp (union) của tất cả các retrieved chunks: `recall = |expected_tokens ∩ union_tokens| / |expected_tokens|`. Reranking chỉ sắp xếp lại thứ tự (permutation) các chunks đã lấy về trong danh sách top-K, hoàn toàn không thêm mới hay loại bỏ bất kỳ chunk nào khỏi tập hợp. Do tập hợp tokens `union_tokens` không thay đổi, Context Recall giữ nguyên giá trị 100%.
 
 **Khi nào reranking không đủ và cần sửa retriever/query/chunking?**
 
 > *Câu trả lời:*
+> 1. **Khi Context Recall ban đầu quá thấp hoặc bằng 0:** Nếu retriever ban đầu hoàn toàn bỏ sót chunk chứa thông tin cần thiết (không lọt vào top-K), reranker không thể đưa thông tin đó vào context vì nó không có sẵn trong tập ứng viên. Cần sửa retriever (chuyển sang Hybrid Search BM25 + Dense, tăng initial top-K, dùng Dense Embeddings tốt hơn).
+> 2. **Khi có Lexical Mismatch / Semantic Gap lớn:** Nếu câu hỏi dùng từ ngữ trừu tượng, ẩn dụ hoặc câu hỏi đa bước (cross-document reasoning) mà lexical overlap reranker không bắt được sự tương đồng từ vựng. Lúc này cần áp dụng Query Transformation (Query Expansion, HyDE, Multi-Query) hoặc Cross-Encoder Neural Reranker (như BGE-Reranker, Cohere Rerank).
+> 3. **Khi Chunking Strategy bị lỗi:** Nếu chunk size quá nhỏ khiến thông tin bị đứt gãy mất liên kết, hoặc chunk size quá lớn chứa quá nhiều nội dung rác làm loãng độ tập trung. Khi đó cần điều chỉnh chunk size, chunk overlap, hoặc áp dụng Hierarchical / Parent-Document Chunking.
 
 ---
 
@@ -344,4 +351,4 @@ Hoàn thành kiểm tra cuối trong khoảng 16:50–17:00.
 - [x] Exercise 3.3 có rubric 1–5 và bias controls.
 - [x] `reflection.md` có ba failure analyses và regression strategy.
 - [x] Đã copy `template.py` thành `solution/solution.py`.
-- [ ] Exercise 3.4 và 3.5 chỉ làm nếu chọn bonus.
+- [x] Exercise 3.4 và 3.5 chỉ làm nếu chọn bonus.
