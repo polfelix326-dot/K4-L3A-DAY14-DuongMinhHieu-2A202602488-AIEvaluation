@@ -30,11 +30,11 @@ critical.
 
 | Metric | Acceptable Low Score Scenario | Critical Low Score Scenario | Action Required |
 |---|---|---|---|
-| Faithfulness | | | |
-| Answer Relevance | | | |
-| Context Recall | | | |
-| Context Precision | | | |
-| Completeness | | | |
+| Faithfulness | Câu hỏi mang tính chào hỏi, xã giao hoặc từ chối lịch sự ngoài phạm vi hỗ trợ (không phụ thuộc vào văn bản context). | Trợ lý bịa đặt chính sách đổi trả, thời hạn bảo hành, thông số kỹ thuật khác với tài liệu nguồn (hallucination). | Siết chặt system prompt yêu cầu chỉ dựa trên context, giảm temperature = 0, bổ sung citation/grounding check. |
+| Answer Relevance | Câu hỏi của người dùng mơ hồ, thiếu thông tin buộc trợ lý phải phản hồi bằng câu hỏi làm rõ (clarifying question). | Người dùng hỏi quy trình hoàn tiền nhưng trợ lý trả lời thông tin giới thiệu công ty hoặc cấu hình sản phẩm không liên quan (off-topic). | Cải thiện prompt hướng dẫn bám sát trọng tâm câu hỏi; bổ sung bước phân loại ý định (intent routing) và query rewrite. |
+| Context Recall | Câu hỏi đơn giản, định nghĩa ngắn chỉ cần trích xuất 1 chi tiết trong 1 chunk duy nhất mà không cần gom toàn bộ thông tin phụ. | Câu hỏi phức tạp đòi hỏi tổng hợp nhiều điều kiện (vd: chính sách bồi hoàn linh kiện) nhưng retriever bỏ sót chunk quan trọng. | Tăng top-k retrieval, tối ưu kích thước chunk và overlap, tích hợp hybrid search (Dense + BM25) hoặc query expansion. |
+| Context Precision | Generator có khả năng kháng nhiễu tốt (robust) và chunk liên quan vẫn nằm trong top 3 kết quả truy xuất. | Chunk đúng rơi xuống cuối danh sách (vị trí 4-5) trong khi các chunk nhiễu/lạc đề chiếm đầu danh sách khiến LLM bị dẫn dắt sai. | Tích hợp reranker (cross-encoder hoặc lexical overlap reranking) để sắp xếp lại tài liệu, đẩy chunk liên quan lên đầu prompt. |
+| Completeness | Câu hỏi mang tính thăm dò hoặc yêu cầu tóm tắt ngắn gọn, người dùng chỉ cần câu trả lời khái quát thay vì toàn bộ chi tiết. | Khách hàng hỏi thủ tục giấy tờ bảo hành hoặc các bước đổi hàng nhưng trợ lý chỉ liệt kê thiếu các điều kiện tiên quyết. | Áp dụng Chain-of-Thought (CoT) yêu cầu checklist đầy đủ các ý trong prompt sinh câu trả lời; thêm self-verification. |
 
 ### Exercise 1.2 — Bias trong LLM-as-a-Judge
 
@@ -47,14 +47,23 @@ Ba bias thường gặp:
 **Câu 1: Thiết kế experiment phát hiện position bias với ít nhất hai conditions.**
 
 > *Câu trả lời:*
+> - **Condition 1 (Baseline - Order AB):** Cung cấp cặp câu trả lời cho LLM Judge theo thứ tự `[Answer A, Answer B]` và yêu cầu judge chấm điểm hoặc chọn câu trả lời tốt hơn cho cùng một câu hỏi và context.
+> - **Condition 2 (Swapped - Order BA):** Hoán đổi thứ tự thành `[Answer B, Answer A]`, giữ nguyên prompt và tiêu chí chấm, cho cùng model judge chấm độc lập.
+> - **Phân tích đo lường:** So sánh tỷ lệ thắng của vị trí thứ nhất (Position 1 Win Rate). Nếu tỷ lệ câu trả lời đứng ở vị trí 1 được chọn vượt trội (ví dụ > 60-65%) ở cả 2 condition bất kể nội dung là A hay B, chứng tỏ judge có position bias rõ rệt. Để giảm thiểu, pipeline đánh giá cần chạy cả 2 chiều và tính điểm trung bình (swap-and-average).
 
 **Câu 2: Làm thế nào giảm verbosity bias bằng rubric design?**
 
 > *Câu trả lời:*
+> - **Chấm điểm theo Fact Checklist (Content Density):** Thiết kế rubric quy định rõ các tiêu chí thông tin bắt buộc phải có thay vì đánh giá cảm tính độ chi tiết; chỉ cộng điểm khi có fact đúng, không tính điểm cho sự dài dòng.
+> - **Ràng buộc tiêu chí súc tích (Conciseness Penalty):** Trong rubric mức điểm 5, quy định rõ câu trả lời phải "ngắn gọn, trực diện, không chứa thông tin thừa/filler phrases". Nếu dài dòng lan man sẽ bị hạ xuống mức điểm thấp hơn.
+> - **Chuẩn hóa đầu vào:** Quy định format trả lời có cấu trúc (ví dụ: bullet points, bảng ngắn) để hạn chế khoảng cách về độ dài giữa các câu trả lời trước khi đưa vào judge.
 
 **Câu 3: Tại sao cần calibrate LLM judge với human labels?**
 
 > *Câu trả lời:*
+> - **Đo lường mức độ đồng thuận (Alignment):** Sử dụng các chỉ số như Cohen's Kappa hoặc Pearson/Spearman correlation để kiểm tra xem đánh giá của LLM Judge có tương quan chặt chẽ với chuyên gia con người (human gold standard) hay không.
+> - **Phát hiện và hiệu chỉnh Systematic Biases:** LLM Judge thường có thiên kiến tiềm ẩn (self-preference, leniency bias). Việc đối chiếu với human labels giúp phát hiện các điểm mù này để tinh chỉnh rubric và prompt của judge.
+> - **Xác định ngưỡng tin cậy (Confidence Gate):** Giúp quyết định ngưỡng điểm nào là an toàn để hệ thống tự động hóa đánh giá và khoảng điểm nào (borderline) cần chuyển cho con người xem xét thủ công.
 
 ### Exercise 1.3 — Evaluation trong CI/CD
 
@@ -62,13 +71,16 @@ Ba bias thường gặp:
 
 | Metric | Threshold | Lý do |
 |---|---:|---|
-| Faithfulness | | |
-| Answer Relevance | | |
-| Completeness | | |
+| Faithfulness | 0.80 | Trong hệ thống CSKH, Hallucination là rủi ro nghiêm trọng nhất có thể gây sai lệch chính sách bảo hành, cam kết sai cho khách hàng và dẫn tới rủi ro pháp lý/tài chính. |
+| Answer Relevance | 0.75 | Đảm bảo trợ lý trả lời đúng trọng tâm nhu cầu của khách hàng, không trả lời vòng vo, lạc đề hoặc né tránh vấn đề gây bức xúc cho người dùng. |
+| Completeness | 0.70 | Đảm bảo câu trả lời chứa đủ các bước hướng dẫn hoặc điều kiện cốt lõi để khách hàng tự giải quyết được vấn đề mà không phải hỏi đi hỏi lại nhiều lần. |
 
 **Câu 2: Khi nào dùng offline evaluation, online evaluation và human review?**
 
 > *Câu trả lời:*
+> - **Offline Evaluation:** Dùng trong giai đoạn phát triển (Development), kiểm thử trước khi release (Staging/Pre-production) và tích hợp vào CI/CD pipeline. Chạy tự động trên bộ Golden Dataset (20 QA) để phát hiện regression ngay khi có thay đổi về prompt, chunking, retriever hay model.
+> - **Online Evaluation:** Dùng khi hệ thống đã deploy lên Production phục vụ người dùng thật. Đo lường liên tục qua telemetry thời gian thực: tỷ lệ phản hồi người dùng (thumbs up/down), tỷ lệ escalate sang nhân viên hỗ trợ, latency, token usage, và chạy LLM judge định kỳ trên log hội thoại thực tế.
+> - **Human Review:** Dùng định kỳ (weekly/monthly audit) bằng cách lấy mẫu ngẫu nhiên (sampling) để calibrate LLM Judge, hoặc kích hoạt cho các ca biên giới (borderline scores gần threshold), các khiếu nại nghiêm trọng của khách hàng, hoặc khi mở rộng thêm miền tri thức mới.
 
 ---
 
