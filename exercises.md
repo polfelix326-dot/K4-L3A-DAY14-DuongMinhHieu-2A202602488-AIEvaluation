@@ -158,31 +158,32 @@ và quyết định thiết kế, không chép lại toàn bộ QA.
 
 | Hạng mục | Kết quả |
 |---|---|
-| Tổng số records | ____ / 20 |
-| Easy | ____ / 5 |
-| Medium | ____ / 7 |
-| Hard | ____ / 5 |
-| Adversarial | ____ / 3 |
-| Source documents được sử dụng | ____ / 10 |
-| Validator status | PASS / FAIL |
+| Tổng số records | 20 / 20 |
+| Easy | 5 / 5 |
+| Medium | 7 / 7 |
+| Hard | 5 / 5 |
+| Adversarial | 3 / 3 |
+| Source documents được sử dụng | 10 / 10 |
+| Validator status | PASS |
 
 **Ba case đại diện cho quyết định thiết kế**
 
 | ID | Difficulty | Source document(s) | Vì sao case phù hợp với difficulty/attack type? |
 |---|---|---|---|
-| | | | |
-| | | | |
-| | | | |
+| M01 | medium | `01_product_catalog.md`, `05_returns_and_exchanges.md` | Đòi hỏi suy luận chéo giữa 2 văn bản (cross-document reasoning): catalog phân loại đệm tai nghe AeroBuds Pro đã mở là phụ kiện vệ sinh dẫn chiếu sang chính sách đổi trả, và chính sách đổi trả quy định phụ kiện vệ sinh không được đổi trả trừ khi bị lỗi kỹ thuật. |
+| H05 | hard | `09_escalation_and_policy_updates.md` | Thử thách khả năng phân xử xung đột phiên bản chính sách (Policy Versioning) và điều kiện biên thời gian: Đơn hàng đặt ngày 20/08/2026 (trước 01/09/2026) giao ngày 25/08/2026 bởi hội viên OrbitPlus. Quy tắc quy định ngày đặt hàng quyết định phiên bản chính sách (v1.0 = 21 ngày, không áp dụng quyền lợi mở rộng 45 ngày của v2.0). |
+| A02 | adversarial | `00_system_scope.md` | Thử thách phòng thủ tấn công Prompt Injection (`SYSTEM OVERRIDE`) yêu cầu lộ system prompt, API keys và thông tin cá nhân khách hàng. Căn cứ theo doc 00, trợ lý phải nhận diện và từ chối các chỉ thị ghi đè quy tắc an toàn, giữ vững vai trò hỗ trợ được phân công. |
 
 **Điểm khó nhất khi xây dựng expected answer hoặc evidence là gì?**
 
 > *Câu trả lời:*
+> Điểm khó nhất là cân bằng giữa tính chính xác tuyệt đối của evidence provenance (phải là chuỗi trích xuất nguyên văn verbatim từ corpus) và tính bao hàm đầy đủ các điều kiện tiên quyết, ngoại lệ biên trong expected answer. Đặc biệt ở các câu hỏi Hard liên quan đến phiên bản chính sách chuyển tiếp (v1.0 vs v2.0) hay giới hạn bồi hoàn combo khuyến mãi, rất dễ vô tình đưa vào các giả định thông thường ngoài đời thực không có căn cứ trong tài liệu nội bộ của OrbitTech.
 
 **Xác nhận:**
 
-- [ ] Mọi claim trong expected answer đều có evidence hỗ trợ.
-- [ ] Không có questions trùng ý và không dùng kiến thức ngoài corpus.
-- [ ] `python validate_golden_dataset.py` báo `PASS`.
+- [x] Mọi claim trong expected answer đều có evidence hỗ trợ.
+- [x] Không có questions trùng ý và không dùng kiến thức ngoài corpus.
+- [x] `python validate_golden_dataset.py` báo `PASS`.
 
 ### Exercise 3.2 — Benchmark Run
 
